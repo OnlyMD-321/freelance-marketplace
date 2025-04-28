@@ -175,11 +175,17 @@ class _ApplicationListScreenState extends State<ApplicationListScreen> {
                     String listSubtitle = 'Status: ${app.status.name}';
 
                     if (_isClientView && app.worker != null) {
+                      // Client View: Show applicant username
                       listTitle = 'Applicant: ${app.worker!.username}';
                       listSubtitle = 'Status: ${app.status.name}';
+                    } else if (!_isClientView && app.job != null) {
+                      // Worker View: Show Job Title if available
+                      listTitle =
+                          'Job: ${app.job!.title ?? app.jobId}'; // Use job title
+                      listSubtitle = 'Status: ${app.status.name}';
                     } else {
-                      // TODO: Show Job Title for worker view (requires data)
-                      listTitle = 'Job ID: ${app.jobId}';
+                      // Fallback if data is missing (shouldn't happen ideally)
+                      listTitle = 'Job ID: ${app.jobId}'; // Fallback to Job ID
                       listSubtitle = 'Status: ${app.status.name}';
                     }
 

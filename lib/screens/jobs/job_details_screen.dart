@@ -154,11 +154,11 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
                 children: [
                   Text(
                     job.title,
-                    style: Theme.of(context).textTheme.headlineSmall,
+                    style: Theme.of(context).textTheme.headlineMedium,
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Posted by: ${job.client?.username ?? 'Unknown'}',
+                    'Posted by: ${job.client?.username ?? job.clientId}',
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                   const SizedBox(height: 4),

@@ -1,5 +1,6 @@
 // filepath: Mobile/lib/models/conversation.dart
 import 'user.dart'; // Assuming UserInfo holds basic user details
+import 'package:intl/intl.dart'; // Import for potential date formatting
 
 class Conversation {
   final String conversationId;
@@ -22,44 +23,90 @@ class Conversation {
     this.relatedJobTitle,
   });
 
+  // Need this getter for ChatProvider logic
+  DateTime? get lastMessageAt => lastMessageTimestamp;
+
   // Helper to get the other participant's info (assuming 2 participants)
   UserInfo? getOtherParticipant(String currentUserId) {
-    return participants.firstWhere(
-      (p) => p.userId != currentUserId,
-      orElse:
-          () =>
-              participants.isNotEmpty
-                  ? participants.first
-                  : UserInfo(
-                    userId: 'unknown',
-                    username: 'Unknown User',
-                  ), // Fallback
-    );
+    try {
+      return participants.firstWhere((p) => p.userId != currentUserId);
+    } catch (e) {
+      // Handle cases with no other participant or only one participant (self-chat?)
+      return participants.isNotEmpty
+          ? participants
+              .first // Return self if only one participant
+          : UserInfo(userId: 'unknown', username: 'Unknown User'); // Fallback
+    }
   }
 
   factory Conversation.fromJson(Map<String, dynamic> json) {
     var participantsJson = json['participants'] as List<dynamic>? ?? [];
     List<UserInfo> participantsList =
-        participantsJson
-            .map((p) => UserInfo.fromJson(p as Map<String, dynamic>))
-            .toList();
+        participantsJson.map((p) {
+          final participantData =
+              p is Map<String, dynamic> && p.containsKey('user')
+                  ? p['user'] as Map<String, dynamic>
+                  : p as Map<String, dynamic>;
+          try {
+            return UserInfo.fromJson(participantData);
+          } catch (e) {
+            print(
+              "Error parsing participant in Conversation.fromJson: $e. Data: $participantData",
+            );
+            // Return a fallback UserInfo or rethrow, depending on desired robustness
+            return UserInfo(userId: 'error', username: 'Error User');
+          }
+        }).toList();
+
+    final lastMessageData = json['lastMessage'] as Map<String, dynamic>?;
+    DateTime? lastTimestamp;
+    if (lastMessageData?['sentAt'] != null) {
+      try {
+        // Attempt to parse the timestamp string
+        lastTimestamp =
+            DateTime.parse(lastMessageData!['sentAt'] as String).toLocal();
+      } catch (e) {
+        print(
+          "Error parsing lastMessageTimestamp in Conversation.fromJson: $e. Value: ${lastMessageData!['sentAt']}",
+        );
+        // Handle parsing error, e.g., set to null or a default date
+        lastTimestamp = null;
+      }
+    }
 
     return Conversation(
       conversationId: json['conversationId'] as String,
       participants: participantsList,
-      lastMessage: json['lastMessage'] as String?,
-      lastMessageTimestamp:
-          json['lastMessageTimestamp'] == null
-              ? null
-              : DateTime.parse(json['lastMessageTimestamp'] as String),
-      unreadCount: (json['unreadCount'] as num?)?.toInt() ?? 0,
-      // Assuming job info might be nested or directly available
+      lastMessage: lastMessageData?['content'] as String?,
+      lastMessageTimestamp: lastTimestamp, // Use the parsed or null timestamp
+      unreadCount: json['unreadCount'] as int? ?? 0,
+      // Parse relatedJobId and relatedJobTitle if they exist in the JSON
       relatedJobId:
-          json['relatedJob']?['jobId'] as String? ??
-          json['relatedJobId'] as String?,
+          json['jobId'] as String?, // Assuming backend sends jobId directly
       relatedJobTitle:
-          json['relatedJob']?['title'] as String? ??
-          json['relatedJobTitle'] as String?,
+          json['job']?['title']
+              as String?, // Assuming backend sends nested job object with title
+    );
+  }
+
+  // Add copyWith method for easier state updates
+  Conversation copyWith({
+    String? conversationId,
+    List<UserInfo>? participants,
+    String? lastMessage,
+    DateTime? lastMessageTimestamp,
+    int? unreadCount,
+    String? relatedJobId,
+    String? relatedJobTitle,
+  }) {
+    return Conversation(
+      conversationId: conversationId ?? this.conversationId,
+      participants: participants ?? this.participants,
+      lastMessage: lastMessage ?? this.lastMessage,
+      lastMessageTimestamp: lastMessageTimestamp ?? this.lastMessageTimestamp,
+      unreadCount: unreadCount ?? this.unreadCount,
+      relatedJobId: relatedJobId ?? this.relatedJobId,
+      relatedJobTitle: relatedJobTitle ?? this.relatedJobTitle,
     );
   }
 
@@ -68,11 +115,7 @@ class Conversation {
     return {
       'conversationId': conversationId,
       'participants': participants.map((p) => p.toJson()).toList(),
-      'lastMessage': lastMessage,
-      'lastMessageTimestamp': lastMessageTimestamp?.toIso8601String(),
-      'unreadCount': unreadCount,
       'relatedJobId': relatedJobId,
-      'relatedJobTitle': relatedJobTitle,
     };
   }
 }

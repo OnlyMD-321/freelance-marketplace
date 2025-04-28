@@ -160,4 +160,38 @@ class AuthProvider with ChangeNotifier {
     _isLoading = false;
     notifyListeners();
   }
+
+  Future<bool> updateUserProfile(Map<String, dynamic> updates) async {
+    if (_currentUser == null) {
+      _errorMessage = "Not logged in.";
+      notifyListeners();
+      return false;
+    }
+
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final updatedUserJson = await _authService.updateUserProfile(updates);
+      if (updatedUserJson != null) {
+        // Update the local user object
+        _currentUser = User.fromJson(updatedUserJson);
+        _isLoading = false;
+        notifyListeners();
+        return true;
+      } else {
+        // This case might indicate an issue not caught by exceptions
+        _errorMessage = "Failed to update profile."; // Use a default message
+        _isLoading = false;
+        notifyListeners();
+        return false;
+      }
+    } catch (error) {
+      _errorMessage = error.toString();
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
 }

@@ -5,7 +5,7 @@ import '../../providers/chat_provider.dart';
 import '../../providers/auth_provider.dart'; // To get current user ID
 import '../../models/conversation.dart';
 // For UserInfo
-import 'chat_message_screen.dart'; // For navigation
+import 'chat_screen.dart'; // Correct import for navigation
 
 class ConversationListScreen extends StatefulWidget {
   const ConversationListScreen({super.key});
@@ -33,25 +33,46 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
   }
 
   void _navigateToMessages(Conversation conversation) {
-    // Select the conversation in the provider *before* navigating
-    Provider.of<ChatProvider>(
-      context,
-      listen: false,
-    ).selectConversation(conversation.conversationId);
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final currentUserId = authProvider.currentUser?.userId;
 
-    // Navigate to the message screen
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder:
-            (context) => ChatMessageScreen(
-              conversationId: conversation.conversationId,
-              // Pass participant info for app bar title
-              // otherParticipant: conversation.getOtherParticipant(
-              //   Provider.of<AuthProvider>(context, listen: false).currentUser!.userId
-              // ),
-            ),
-      ),
-    );
+    if (currentUserId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Error: Could not identify current user.'),
+        ),
+      );
+      return;
+    }
+
+    final otherParticipant = conversation.getOtherParticipant(currentUserId);
+    if (otherParticipant == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Error: Could not identify recipient.')),
+      );
+      return;
+    }
+
+    // Select the conversation in the provider *before* navigating (already done)
+    // Provider.of<ChatProvider>(context, listen: false)
+    //     .selectConversation(conversation.conversationId);
+
+    // Navigate to the correct screen (ChatScreen) and pass required arguments
+    Navigator.of(context)
+        .push(
+          MaterialPageRoute(
+            builder:
+                (context) => ChatScreen(
+                  // Use correct screen name
+                  conversationId: conversation.conversationId,
+                  recipient: otherParticipant, // Pass the recipient UserInfo
+                ),
+          ),
+        )
+        .then((_) {
+          // Optional: Refresh conversation list when returning if needed
+          // _fetchConversations();
+        });
   }
 
   // Helper to format timestamp (consider using 'intl' package for better formatting)

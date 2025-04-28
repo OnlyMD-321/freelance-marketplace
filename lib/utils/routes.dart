@@ -11,4 +11,5 @@ class AppRoutes {
   static const chatList = '/chat-list';
   static const chatScreen = '/chat-screen';
   static const profile = '/profile';
+  static const editProfile = '/edit-profile'; // Added route for edit profile
 }

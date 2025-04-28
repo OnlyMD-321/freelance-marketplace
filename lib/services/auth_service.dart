@@ -79,7 +79,7 @@ class AuthService {
   Future<void> signOut() async {
     try {
       await _storageService.deleteToken();
-      print("Token deleted successfully.");
+      print("[AuthService] signOut: Token deleted.");
     } catch (error) {
       print("Error deleting token during sign out: $error");
     }
@@ -127,19 +127,15 @@ class AuthService {
           "[AuthService] getCurrentUserProfile: Success (200). Parsing user.",
         ); // Added log
         return User.fromJson(responseData);
+      } else if (response.statusCode == 401 || response.statusCode == 403) {
+        print("[AuthService] getCurrentUserProfile: Unauthorized (401/403).");
+        await signOut(); // Clear local token if unauthorized
+        return null;
       } else {
         print(
           '[AuthService] getCurrentUserProfile: Failed. Status: ${response.statusCode}, Body: ${response.body}', // Enhanced log
         );
-        if (response.statusCode == 401 || response.statusCode == 403) {
-          print(
-            "[AuthService] getCurrentUserProfile: Unauthorized/Forbidden. Clearing token.",
-          ); // Added log
-          await _storageService.deleteToken(); // Clear invalid token
-          // Re-throw a specific exception to be caught by AuthProvider
-          throw Exception('Unauthorized (401/403). Token cleared.');
-        }
-        return null; // Return null for other non-200 errors (e.g., 404, 500)
+        throw Exception('Failed to load user profile');
       }
     } on TimeoutException catch (e) {
       // Specific catch for timeout
@@ -151,8 +147,65 @@ class AuthService {
       print(
         '[AuthService] getCurrentUserProfile: Error - $error',
       ); // Enhanced log
-      // Rethrow the error so AuthProvider can catch it
-      rethrow;
+      // Consider specific error handling (e.g., network error vs. timeout)
+      return null; // Or rethrow depending on desired behavior
+    }
+  }
+
+  Future<Map<String, dynamic>?> updateUserProfile(
+    Map<String, dynamic> updates,
+  ) async {
+    final url = Uri.parse('$_usersUrl/me'); // Endpoint for updating profile
+    print("[AuthService] updateUserProfile: Attempting PATCH $url");
+    try {
+      final headers = await _getHeaders();
+      final response = await http
+          .put(url, headers: headers, body: jsonEncode(updates))
+          .timeout(const Duration(seconds: 15));
+
+      print(
+        "[AuthService] updateUserProfile: Response status: ${response.statusCode}",
+      );
+      // print("[AuthService] updateUserProfile: Response body: ${response.body}"); // Uncomment for debugging
+
+      if (response.statusCode == 200) {
+        final responseData = jsonDecode(response.body);
+        print("[AuthService] updateUserProfile: Success (200).");
+        // IMPORTANT: Extract the 'user' object from the response
+        if (responseData is Map<String, dynamic> &&
+            responseData.containsKey('user')) {
+          return responseData['user'] as Map<String, dynamic>;
+        } else {
+          print(
+            "[AuthService] updateUserProfile: Error - 'user' object missing in response.",
+          );
+          throw Exception('Invalid response format from server');
+        }
+      } else {
+        // Try to parse error message from backend
+        String errorMessage = 'Failed to update profile.';
+        try {
+          final errorData = jsonDecode(response.body);
+          if (errorData is Map<String, dynamic> &&
+              errorData.containsKey('message')) {
+            errorMessage = errorData['message'];
+          }
+        } catch (_) {
+          /* Ignore parsing errors */
+        }
+        print(
+          "[AuthService] updateUserProfile: Failed. Status: ${response.statusCode}, Message: $errorMessage",
+        );
+        throw Exception(errorMessage); // Throw exception with backend message
+      }
+    } catch (error) {
+      print("[AuthService] updateUserProfile: Error: $error");
+      // Rethrow the specific error message or a generic one
+      throw Exception(
+        error is Exception
+            ? error.toString() // Use toString() for general exceptions
+            : 'Failed to update profile due to an unexpected error.',
+      );
     }
   }
 }

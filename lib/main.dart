@@ -10,6 +10,9 @@ import 'screens/home/home_screen.dart';
 import 'screens/splash_screen.dart';
 import 'screens/jobs/create_job_screen.dart';
 import 'screens/applications/application_list_screen.dart';
+import 'screens/applications/application_details_screen.dart'; // Import details screen
+import 'models/application.dart'; // Import Application model
+import 'screens/profile/edit_profile_screen.dart'; // Import EditProfileScreen
 import 'utils/routes.dart';
 
 void main() {
@@ -23,12 +26,24 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (ctx) => AuthProvider()),
-        ChangeNotifierProvider(create: (ctx) => JobProvider()),
-        ChangeNotifierProvider(create: (ctx) => ApplicationProvider()),
-        ChangeNotifierProvider(
-          create: (ctx) => ChatProvider(),
-        ), // Add ChatProvider
+        // Assume AuthProvider is independent
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+
+        // Assume JobProvider and ApplicationProvider are independent
+        // (or manage auth internally/differently)
+        ChangeNotifierProvider(create: (_) => JobProvider()),
+        ChangeNotifierProvider(create: (_) => ApplicationProvider()),
+
+        // ChatProvider depends on AuthProvider
+        ChangeNotifierProxyProvider<AuthProvider, ChatProvider>(
+          // Create needs to return an instance, use a temporary AuthProvider
+          // The `update` callback will provide the real one immediately after.
+          create: (_) => ChatProvider(AuthProvider()),
+          update:
+              (_, auth, previousChatProvider) =>
+              // Create new instance or update existing one with new auth
+              ChatProvider(auth),
+        ),
       ],
       child: Consumer<AuthProvider>(
         builder:
@@ -38,6 +53,7 @@ class MyApp extends StatelessWidget {
                 primarySwatch: Colors.blue,
                 visualDensity: VisualDensity.adaptivePlatformDensity,
               ),
+              debugShowCheckedModeBanner: false,
               // Determine the initial screen based on auth state
               home: _buildHomeScreen(auth),
               // Define named routes for navigation
@@ -51,6 +67,28 @@ class MyApp extends StatelessWidget {
                 AppRoutes.signUp: (ctx) => const SignUpScreen(),
                 AppRoutes.createJob: (ctx) => const CreateJobScreen(),
                 AppRoutes.applications: (ctx) => const ApplicationListScreen(),
+                AppRoutes.applicationDetails: (ctx) {
+                  // Extract the Application object from arguments
+                  final application =
+                      ModalRoute.of(ctx)!.settings.arguments as Application?;
+                  // Handle cases where arguments might be missing or wrong type
+                  if (application == null) {
+                    // Navigate back or show an error screen
+                    print(
+                      "Error: Missing application arguments for details route.",
+                    );
+                    // Returning a simple error screen for now
+                    return Scaffold(
+                      appBar: AppBar(title: const Text("Error")),
+                      body: const Center(
+                        child: Text("Could not load application details."),
+                      ),
+                    );
+                  }
+                  return ApplicationDetailsScreen(application: application);
+                },
+                AppRoutes.editProfile:
+                    (ctx) => const EditProfileScreen(), // Added route
                 // Define other routes...
               },
               onUnknownRoute: (settings) {
