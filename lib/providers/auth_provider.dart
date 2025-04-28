@@ -30,36 +30,66 @@ class AuthProvider with ChangeNotifier {
 
   // Private method for internal use (login check, refresh)
   Future<void> _tryAutoLogin() async {
+    print("[AuthProvider] Attempting auto-login...");
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
-    _token = await _storageService.getToken();
-    if (_token != null) {
-      // Token exists, try fetching user profile
-      try {
-        _currentUser = await _authService.getCurrentUserProfile();
-        if (_currentUser == null) {
-          // Profile fetch failed (e.g., token expired), clear token
-          _token = null;
-          await _storageService.deleteToken();
-          _errorMessage =
-              "Session invalid. Please sign in again."; // Set error message
-        }
-      } catch (error) {
-        // Handle specific errors, e.g., unauthorized
-        print("Auto-login/refresh profile fetch failed: $error");
-        _token = null;
-        _currentUser = null;
-        await _storageService.deleteToken(); // Ensure invalid token is cleared
-        _errorMessage = "Session expired or invalid. Please sign in again.";
-      }
-    } else {
-      _currentUser = null; // Ensure user is null if no token
-    }
+    try {
+      _token = await _storageService.getToken();
+      print(
+        "[AuthProvider] Token from storage: ${_token != null ? 'Found' : 'Not Found'}",
+      );
 
-    _isLoading = false;
-    notifyListeners();
+      if (_token != null) {
+        // Token exists, try fetching user profile
+        try {
+          print("[AuthProvider] Fetching user profile...");
+          _currentUser = await _authService.getCurrentUserProfile();
+          print("[AuthProvider] Profile fetched: ${_currentUser?.toJson()}");
+
+          if (_currentUser == null) {
+            print(
+              "[AuthProvider] Profile fetch returned null, clearing token.",
+            );
+            _token = null;
+            await _storageService.deleteToken();
+            _errorMessage =
+                "Session invalid or profile fetch failed. Please sign in again.";
+          } else {
+            print("[AuthProvider] Auto-login successful.");
+          }
+        } catch (error) {
+          print(
+            "[AuthProvider] Error fetching profile during auto-login: $error",
+          );
+          _token = null;
+          _currentUser = null;
+          await _storageService
+              .deleteToken(); // Ensure invalid token is cleared
+          _errorMessage =
+              "Session expired or invalid ($error). Please sign in again.";
+        }
+      } else {
+        print("[AuthProvider] No token found, clearing user.");
+        _currentUser = null; // Ensure user is null if no token
+      }
+    } catch (e) {
+      print(
+        "[AuthProvider] Unexpected error during auto-login storage/logic: $e",
+      );
+      _token = null;
+      _currentUser = null;
+      _errorMessage = "An unexpected error occurred during login check.";
+      // Ensure token is cleared if storage fails too
+      try {
+        await _storageService.deleteToken();
+      } catch (_) {}
+    } finally {
+      print("[AuthProvider] Auto-login finished. Setting isLoading=false.");
+      _isLoading = false;
+      notifyListeners();
+    }
   }
 
   Future<Map<String, dynamic>> signIn(String email, String password) async {

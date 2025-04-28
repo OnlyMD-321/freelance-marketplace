@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import '../utils/constants.dart';
 import 'secure_storage_service.dart';
 import '../models/user.dart'; // Import User model
+import 'dart:async';
 
 class AuthService {
   final SecureStorageService _storageService = SecureStorageService();
@@ -21,9 +22,9 @@ class AuthService {
       );
       final responseData = jsonDecode(response.body);
 
-      if (response.statusCode == 200 && responseData['token'] != null) {
-        await _storageService.saveToken(responseData['token']);
-        return {'success': true, 'token': responseData['token']};
+      if (response.statusCode == 200 && responseData['accessToken'] != null) {
+        await _storageService.saveToken(responseData['accessToken']);
+        return {'success': true, 'token': responseData['accessToken']};
       } else {
         return {
           'success': false,
@@ -99,27 +100,58 @@ class AuthService {
   // Fetch Current User Profile
   Future<User?> getCurrentUserProfile() async {
     final url = Uri.parse('$_usersUrl/me'); // Assumes endpoint /api/v1/users/me
+    print(
+      "[AuthService] getCurrentUserProfile: Attempting GET $url",
+    ); // Added log
     try {
+      print(
+        "[AuthService] getCurrentUserProfile: Getting headers...",
+      ); // Added log
       final headers = await _getHeaders();
-      final response = await http.get(url, headers: headers);
+      print(
+        "[AuthService] getCurrentUserProfile: Headers obtained. Making request...",
+      ); // Added log
+
+      final response = await http
+          .get(url, headers: headers)
+          .timeout(const Duration(seconds: 10)); // Added timeout
+
+      print(
+        "[AuthService] getCurrentUserProfile: Response status: ${response.statusCode}",
+      ); // Added log
+      // print("[AuthService] getCurrentUserProfile: Response body: ${response.body}"); // Optional: Uncomment for full body
 
       if (response.statusCode == 200) {
         final responseData = jsonDecode(response.body);
+        print(
+          "[AuthService] getCurrentUserProfile: Success (200). Parsing user.",
+        ); // Added log
         return User.fromJson(responseData);
       } else {
         print(
-          'Failed to fetch profile: ${response.statusCode} ${response.body}',
+          '[AuthService] getCurrentUserProfile: Failed. Status: ${response.statusCode}, Body: ${response.body}', // Enhanced log
         );
-        // If token is invalid (e.g., 401), might need to trigger sign out
         if (response.statusCode == 401 || response.statusCode == 403) {
+          print(
+            "[AuthService] getCurrentUserProfile: Unauthorized/Forbidden. Clearing token.",
+          ); // Added log
           await _storageService.deleteToken(); // Clear invalid token
-          throw Exception('Unauthorized. Please sign in again.');
+          // Re-throw a specific exception to be caught by AuthProvider
+          throw Exception('Unauthorized (401/403). Token cleared.');
         }
-        return null;
+        return null; // Return null for other non-200 errors (e.g., 404, 500)
       }
+    } on TimeoutException catch (e) {
+      // Specific catch for timeout
+      print(
+        '[AuthService] getCurrentUserProfile: Error - Request timed out: $e',
+      );
+      throw Exception('Request timed out while fetching profile.');
     } catch (error) {
-      print('Error fetching profile: $error');
-      // Rethrow specific errors if needed
+      print(
+        '[AuthService] getCurrentUserProfile: Error - $error',
+      ); // Enhanced log
+      // Rethrow the error so AuthProvider can catch it
       rethrow;
     }
   }

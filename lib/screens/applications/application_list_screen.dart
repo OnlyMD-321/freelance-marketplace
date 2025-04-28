@@ -2,9 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/application_provider.dart';
-import '../../providers/auth_provider.dart'; // To check user type (optional here)
 import '../../models/application.dart';
-import '../../models/user.dart'; // For UserType (optional here)
 import '../../utils/routes.dart'; // For navigation to details
 
 class ApplicationListScreen extends StatefulWidget {
@@ -64,11 +62,13 @@ class _ApplicationListScreenState extends State<ApplicationListScreen> {
     ).pushNamed(AppRoutes.applicationDetails, arguments: application).then((_) {
       // Refresh list when returning from details, especially for client view
       // where status might have changed.
+      // Simply calling _fetchApplications should trigger the provider update,
+      // which the Consumer will pick up.
       if (_isClientView && mounted) {
-        setState(() {
-          // Re-assign the future to trigger FutureBuilder/Consumer refresh
-          _fetchApplicationsFuture = _fetchApplications();
-        });
+        print(
+          "[AppListScreen] Returned from details, refetching client view applications...",
+        );
+        _fetchApplications(); // Call fetch directly, provider will notify
       }
     });
   }

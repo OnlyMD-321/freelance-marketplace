@@ -31,7 +31,7 @@ class Job {
       jobId: json['jobId'] as String,
       clientId: json['clientId'] as String,
       title: json['title'] as String,
-      description: json['description'] as String,
+      description: json['description'] as String? ?? '',
       budget: (json['budget'] as num?)?.toDouble(),
       status: _parseJobStatus(json['status'] as String?),
       postedDate: DateTime.parse(json['postedDate'] as String),

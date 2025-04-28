@@ -25,33 +25,53 @@ class _SignInScreenState extends State<SignInScreen> {
   }
 
   Future<void> _submitSignIn() async {
+    print("[_SignInScreen] _submitSignIn called."); // Added log
     // Hide keyboard
     FocusScope.of(context).unfocus();
 
-    if (_formKey.currentState!.validate() && !_isLoading) {
+    final isFormValid = _formKey.currentState?.validate() ?? false;
+    print(
+      "[_SignInScreen] Form valid: $isFormValid, isLoading: $_isLoading",
+    ); // Added log
+
+    // Use the local variable for validation check
+    if (isFormValid && !_isLoading) {
+      print(
+        "[_SignInScreen] Form valid and not loading. Setting isLoading=true.",
+      ); // Added log
       setState(() {
         _isLoading = true;
       });
 
       final email = _emailController.text;
       final password = _passwordController.text;
+      print("[_SignInScreen] Email: $email"); // Added log
 
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      print("[_SignInScreen] Calling authProvider.signIn..."); // Added log
       // signIn now returns a Map<String, dynamic>
       final result = await authProvider.signIn(email, password);
+      print("[_SignInScreen] authProvider.signIn result: $result"); // Added log
 
       // Check the 'success' key in the result map
       final bool success = result['success'] ?? false;
       final String? message = result['message']; // Get the message
+      print(
+        "[_SignInScreen] Sign in success: $success, message: $message",
+      ); // Added log
 
       // Check mounted status *before* using context or setState
       if (!mounted) {
+        print(
+          "[_SignInScreen] Widget not mounted after async call. Returning.",
+        ); // Added log
         // If the widget was disposed during the async call, do nothing further.
         // Resetting _isLoading might not be necessary if the widget is gone.
         return;
       }
 
       if (!success) {
+        print("[_SignInScreen] Sign in failed. Showing SnackBar."); // Added log
         setState(() {
           _isLoading = false;
         });
@@ -62,13 +82,10 @@ class _SignInScreenState extends State<SignInScreen> {
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
-      }
-      // No 'else' needed here for success case.
-      // The Consumer<AuthProvider> in main.dart will handle navigation
-      // by rebuilding the MaterialApp when isAuthenticated changes.
-      // We just need to ensure isLoading is handled correctly if the widget
-      // is still mounted but sign-in failed.
-      else {
+      } else {
+        print(
+          "[_SignInScreen] Sign in successful. Letting AuthProvider handle navigation.",
+        ); // Added log
         // If successful, the Consumer in main.dart handles navigation.
         // We might still be loading briefly while the Consumer rebuilds.
         // Setting isLoading to false might cause a flicker if done here.
@@ -76,11 +93,17 @@ class _SignInScreenState extends State<SignInScreen> {
         // However, ensure it's false if the widget somehow remains mounted
         // without navigating immediately (though unlikely with this setup).
         if (mounted) {
-          setState(() {
-            _isLoading = false;
-          });
+          // Keep isLoading true until the navigation actually happens via the provider
+          // Setting it false here might cause a flicker back to the button
+          // setState(() {
+          //   _isLoading = false;
+          // });
         }
       }
+    } else {
+      print(
+        "[_SignInScreen] Form invalid or already loading. Submit aborted.",
+      ); // Added log
     }
   }
 

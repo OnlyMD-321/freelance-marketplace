@@ -38,27 +38,40 @@ class MyApp extends StatelessWidget {
                 primarySwatch: Colors.blue,
                 visualDensity: VisualDensity.adaptivePlatformDensity,
               ),
-              initialRoute:
-                  auth.isLoading
-                      ? AppRoutes.splash
-                      : auth.isAuthenticated
-                      ? AppRoutes.home
-                      : AppRoutes.signIn,
+              // Determine the initial screen based on auth state
+              home: _buildHomeScreen(auth),
+              // Define named routes for navigation
               routes: {
-                AppRoutes.splash: (ctx) => const SplashScreen(),
-                AppRoutes.signIn: (ctx) => const SignInScreen(),
+                // Do NOT define routes handled by the 'home' property here ('/', '/signin', '/home')
+                // AppRoutes.splash: (ctx) => const SplashScreen(), // Handled by home
+                // AppRoutes.signIn: (ctx) => const SignInScreen(), // Handled by home
+                // AppRoutes.home: (ctx) => const HomeScreen(),     // Handled by home
+
+                // Keep other routes needed for navigation:
                 AppRoutes.signUp: (ctx) => const SignUpScreen(),
-                AppRoutes.home: (ctx) => const HomeScreen(),
                 AppRoutes.createJob: (ctx) => const CreateJobScreen(),
                 AppRoutes.applications: (ctx) => const ApplicationListScreen(),
+                // Define other routes...
               },
               onUnknownRoute: (settings) {
+                // Fallback to splash or sign-in if route is unknown
                 return MaterialPageRoute(
-                  builder: (ctx) => const SplashScreen(),
+                  builder: (ctx) => const SplashScreen(), // Or SignInScreen?
                 );
               },
             ),
       ),
     );
+  }
+
+  // Helper function to decide which screen to show initially
+  Widget _buildHomeScreen(AuthProvider auth) {
+    if (auth.isLoading) {
+      return const SplashScreen(); // Show splash while checking auth
+    }
+    if (auth.isAuthenticated) {
+      return const HomeScreen(); // User is logged in
+    }
+    return const SignInScreen(); // User is not logged in
   }
 }

@@ -14,10 +14,21 @@ class UserInfo {
   });
 
   factory UserInfo.fromJson(Map<String, dynamic> json) {
+    // Ensure userId exists, otherwise throw (or handle gracefully)
+    if (json['userId'] == null) {
+      print("Error parsing UserInfo: Missing userId. JSON: $json");
+      // Option 1: Throw an error
+      throw FormatException("Missing required field: userId in client data.");
+      // Option 2: Return a default/placeholder UserInfo (less ideal)
+      // return UserInfo(userId: 'unknown', username: json['username'] ?? 'Unknown', profilePictureUrl: json['profilePictureUrl']);
+    }
     return UserInfo(
       userId: json['userId'] as String,
-      username: json['username'] as String,
-      profilePictureUrl: json['profilePictureUrl'] as String?,
+      username:
+          json['username'] as String? ??
+          'Unknown', // Handle potentially missing username
+      profilePictureUrl:
+          json['profilePictureUrl'] as String?, // Already handles null
     );
   }
 
