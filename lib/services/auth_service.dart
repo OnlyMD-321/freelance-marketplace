@@ -203,8 +203,57 @@ class AuthService {
       // Rethrow the specific error message or a generic one
       throw Exception(
         error is Exception
-            ? error.toString() // Use toString() for general exceptions
+            ? error
+                .toString() // Use toString() for general exceptions
             : 'Failed to update profile due to an unexpected error.',
+      );
+    }
+  }
+
+  // Delete Current User Account
+  Future<bool> deleteMyAccount() async {
+    // Assumes endpoint DELETE /api/v1/users/me
+    final url = Uri.parse('$_usersUrl/me');
+    print("[AuthService] deleteMyAccount: Attempting DELETE $url");
+
+    try {
+      final headers = await _getHeaders();
+      final response = await http
+          .delete(url, headers: headers)
+          .timeout(const Duration(seconds: 15));
+
+      print(
+        "[AuthService] deleteMyAccount: Response status: ${response.statusCode}",
+      );
+
+      // 204 No Content is the typical success status for DELETE
+      if (response.statusCode == 204 || response.statusCode == 200) {
+        print("[AuthService] deleteMyAccount: Success (204/200).");
+        // Clear local token immediately after successful deletion
+        await _storageService.deleteToken();
+        return true;
+      } else {
+        String errorMessage = 'Failed to delete account.';
+        try {
+          final errorData = jsonDecode(response.body);
+          if (errorData is Map<String, dynamic> &&
+              errorData.containsKey('message')) {
+            errorMessage = errorData['message'];
+          }
+        } catch (_) {
+          /* Ignore parsing errors */
+        }
+        print(
+          "[AuthService] deleteMyAccount: Failed. Status: ${response.statusCode}, Message: $errorMessage",
+        );
+        throw Exception(errorMessage);
+      }
+    } catch (error) {
+      print("[AuthService] deleteMyAccount: Error: $error");
+      throw Exception(
+        error is Exception
+            ? error.toString()
+            : 'Failed to delete account due to an unexpected error.',
       );
     }
   }

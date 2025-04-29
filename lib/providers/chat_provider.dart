@@ -5,8 +5,6 @@ import 'package:flutter/material.dart';
 import '../services/chat_service.dart';
 import '../models/conversation.dart';
 import '../models/message.dart';
-import '../models/user.dart'; // For UserInfo
-import '../screens/chat/chat_screen.dart'; // Import ChatScreen
 import 'auth_provider.dart'; // Import AuthProvider
 // Import WebSocket service later
 // import '../services/websocket_service.dart';
@@ -27,6 +25,7 @@ class ChatProvider with ChangeNotifier {
   bool _isLoadingMessages = false;
   String? _errorMessageConversations;
   String? _errorMessageMessages;
+  int _unreadMessageCount = 0; // <-- Add unread count state
 
   // --- Getters ---
   List<Conversation> get conversations => [..._conversations];
@@ -45,6 +44,7 @@ class ChatProvider with ChangeNotifier {
   // Use specific error messages
   String? get errorMessageConversations => _errorMessageConversations;
   String? get errorMessageMessages => _errorMessageMessages;
+  int get unreadMessageCount => _unreadMessageCount; // <-- Add getter
 
   ChatProvider(this.authProvider) {
     _initializeChatService();
@@ -73,8 +73,20 @@ class ChatProvider with ChangeNotifier {
       },
     );
 
-    // Connect the socket
-    await _chatService.connect();
+    // Connect the socket and wait for connection
+    try {
+      print("[ChatProvider] Attempting to connect socket...");
+      await _chatService.connect();
+      print(
+        "[ChatProvider] Socket connection successful (or already connected).",
+      );
+    } catch (e) {
+      print(
+        "[ChatProvider] Failed to connect socket during initialization: $e",
+      );
+      // Handle connection error on startup if needed
+      // Maybe set an error state in the provider?
+    }
   }
 
   @override
@@ -165,6 +177,7 @@ class ChatProvider with ChangeNotifier {
     // --- 3. Notify Listeners ---
     if (messageListChanged || conversationListChanged) {
       print("[ChatProvider] Notifying listeners due to incoming message.");
+      _calculateTotalUnreadCount(); // <-- Update total count
       notifyListeners();
     }
   }
@@ -179,15 +192,18 @@ class ChatProvider with ChangeNotifier {
       _conversations = await _chatService.listConversations();
       // Sort conversations by last message timestamp (newest first)
       _conversations.sort((a, b) {
-        if (a.lastMessageTimestamp == null && b.lastMessageTimestamp == null)
+        if (a.lastMessageTimestamp == null && b.lastMessageTimestamp == null) {
           return 0;
+        }
         if (a.lastMessageTimestamp == null) return 1; // Put nulls last
         if (b.lastMessageTimestamp == null) return -1;
         return b.lastMessageTimestamp!.compareTo(a.lastMessageTimestamp!);
       });
+      _calculateTotalUnreadCount(); // <-- Update total count after fetch
     } catch (error) {
       _errorMessageConversations = "Failed to fetch conversations: $error";
       _conversations = [];
+      _unreadMessageCount = 0; // Reset count on error
     } finally {
       _isLoadingConversations = false;
       notifyListeners();
@@ -270,7 +286,8 @@ class ChatProvider with ChangeNotifier {
         relatedJobId: oldConversation.relatedJobId,
         relatedJobTitle: oldConversation.relatedJobTitle,
       );
-      notifyListeners();
+      _calculateTotalUnreadCount(); // <-- Update total count after marking read
+      notifyListeners(); // Notify UI of change
 
       // Call the service
       await _chatService.markAsRead(conversationId);
@@ -465,7 +482,21 @@ class ChatProvider with ChangeNotifier {
       // --- End revert ---
 
       notifyListeners(); // Update UI to remove the failed message & revert preview
-      throw error; // Rethrow to be caught by the UI
+      rethrow; // Rethrow to be caught by the UI
+    }
+  }
+
+  // --- Add method to calculate total unread ---
+  void _calculateTotalUnreadCount() {
+    int total = 0;
+    for (final conversation in _conversations) {
+      total += conversation.unreadCount;
+    }
+    // Avoid unnecessary notifications if the count hasn't changed
+    if (total != _unreadMessageCount) {
+      _unreadMessageCount = total;
+      print("[ChatProvider] Updated total unread count: $_unreadMessageCount");
+      // notifyListeners(); // No need to notify here, it's called by the calling methods
     }
   }
 }

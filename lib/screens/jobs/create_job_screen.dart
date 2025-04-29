@@ -1,6 +1,7 @@
 // filepath: Mobile/freelancers_mobile_app/lib/screens/jobs/create_job_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/intl.dart'; // For date formatting
 import '../../providers/job_provider.dart';
 
 class CreateJobScreen extends StatefulWidget {
@@ -35,6 +36,18 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
       lastDate: DateTime.now().add(
         const Duration(days: 365 * 2),
       ), // Allow up to 2 years
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: Theme.of(context).colorScheme.copyWith(
+              // primary: Theme.of(context).colorScheme.primary, // Example
+              // onPrimary: Theme.of(context).colorScheme.onPrimary, // Example
+            ),
+            // textButtonTheme: TextButtonThemeData(...) // Example
+          ),
+          child: child!,
+        );
+      },
     );
     if (picked != null && picked != _selectedDeadline) {
       setState(() {
@@ -44,6 +57,9 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
   }
 
   Future<void> _submitCreateJob() async {
+    // Hide keyboard first
+    FocusScope.of(context).unfocus();
+
     if (_formKey.currentState!.validate() && !_isLoading) {
       setState(() {
         _isLoading = true;
@@ -51,39 +67,54 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
 
       final title = _titleController.text;
       final description = _descriptionController.text;
-      final budget = double.tryParse(_budgetController.text); // Can be null
+      final budget = double.tryParse(
+        _budgetController.text.replaceAll(',', ''),
+      ); // Handle potential commas
 
       final jobProvider = Provider.of<JobProvider>(context, listen: false);
-      final success = await jobProvider.createJob(
-        title: title,
-        description: description,
-        budget: budget,
-        deadline: _selectedDeadline,
-      );
+      bool success = false;
+      try {
+        success = await jobProvider.createJob(
+          title: title,
+          description: description,
+          budget: budget,
+          deadline: _selectedDeadline,
+        );
+      } catch (e) {
+        success = false;
+        print("Error creating job: $e");
+      }
 
-      if (!mounted) return; // Check if widget is still mounted
-
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
       });
 
-      if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Job created successfully!')),
-        );
-        Navigator.of(context).pop(); // Go back after successful creation
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(jobProvider.errorMessage ?? 'Failed to create job.'),
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            success
+                ? 'Job created successfully!'
+                : (jobProvider.errorMessage ?? 'Failed to create job.'),
           ),
-        );
+          backgroundColor:
+              success ? Colors.green : Theme.of(context).colorScheme.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+
+      if (success) {
+        Navigator.of(context).pop();
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final textTheme = theme.textTheme;
+
     return Scaffold(
       appBar: AppBar(title: const Text('Create New Job')),
       body: Padding(
@@ -96,22 +127,30 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
               children: <Widget>[
                 TextFormField(
                   controller: _titleController,
-                  decoration: const InputDecoration(labelText: 'Job Title'),
+                  decoration: const InputDecoration(
+                    labelText: 'Job Title',
+                    prefixIcon: Icon(Icons.title),
+                    // Uses theme's inputDecorationTheme
+                  ),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return 'Please enter a title';
                     }
                     return null;
                   },
+                  textInputAction: TextInputAction.next,
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 24),
+
                 TextFormField(
                   controller: _descriptionController,
                   decoration: const InputDecoration(
                     labelText: 'Job Description',
-                    alignLabelWithHint: true, // Better alignment for multiline
+                    prefixIcon: Icon(Icons.description_outlined),
+                    alignLabelWithHint: true,
+                    // Uses theme's inputDecorationTheme
                   ),
-                  maxLines: 5,
+                  maxLines: 6,
                   minLines: 3,
                   validator: (value) {
                     if (value == null || value.isEmpty) {
@@ -119,45 +158,88 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
                     }
                     return null;
                   },
+                  textCapitalization: TextCapitalization.sentences,
+                  textInputAction:
+                      TextInputAction
+                          .newline, // Allows newline in multiline field
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 24),
+
                 TextFormField(
                   controller: _budgetController,
                   decoration: const InputDecoration(
                     labelText: 'Budget (Optional)',
-                    prefixText: '\$ ',
+                    prefixIcon: Icon(Icons.attach_money),
+                    // Consider adding prefixText: '\$ ' if appropriate
+                    // prefixText: '\$ ',
+                    // Uses theme's inputDecorationTheme
                   ),
                   keyboardType: const TextInputType.numberWithOptions(
                     decimal: true,
                   ),
-                  // No validator needed as it's optional, but could add format check
+                  // validator: (value) { // Optional: Validate format if needed
+                  //   if (value != null && value.isNotEmpty && double.tryParse(value.replaceAll(',', '')) == null) {
+                  //     return 'Please enter a valid number';
+                  //   }
+                  //   return null;
+                  // },
+                  textInputAction: TextInputAction.done,
                 ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
+                const SizedBox(height: 24),
+
+                InputDecorator(
+                  decoration: InputDecoration(
+                    labelText: 'Deadline (Optional)',
+                    prefixIcon: const Icon(Icons.calendar_today_outlined),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ), // Adjust padding
+                    // Apply similar border/fill from theme
+                    filled: true,
+                    fillColor: theme.inputDecorationTheme.fillColor,
+                    border: theme.inputDecorationTheme.border,
+                    enabledBorder: theme.inputDecorationTheme.enabledBorder,
+                    focusedBorder: theme.inputDecorationTheme.focusedBorder,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
                         _selectedDeadline == null
-                            ? 'No Deadline Set'
-                            // TODO: Format date nicely (e.g., using 'intl' package)
-                            : 'Deadline: ${_selectedDeadline!.toLocal().toString().split(' ')[0]}',
+                            ? 'Not Set'
+                            : DateFormat.yMd().format(
+                              _selectedDeadline!.toLocal(),
+                            ), // Use intl format
+                        style: textTheme.bodyLarge?.copyWith(
+                          color:
+                              _selectedDeadline == null
+                                  ? colorScheme.onSurfaceVariant
+                                  : colorScheme.onSurface,
+                        ),
                       ),
-                    ),
-                    TextButton(
-                      onPressed: () => _selectDeadline(context),
-                      child: const Text('Set Deadline'),
-                    ),
-                  ],
+                      TextButton(
+                        onPressed: () => _selectDeadline(context),
+                        child: Text(
+                          _selectedDeadline == null
+                              ? 'Set Date'
+                              : 'Change Date',
+                        ),
+                        // Uses theme's textButtonTheme
+                      ),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 32),
+                const SizedBox(height: 40),
+
                 _isLoading
                     ? const Center(child: CircularProgressIndicator())
-                    : ElevatedButton(
+                    : ElevatedButton.icon(
+                      icon: const Icon(Icons.post_add),
                       onPressed: _submitCreateJob,
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 15),
-                      ),
-                      child: const Text('Post Job'),
+                      label: const Text('Post Job'),
+                      // Uses theme's elevatedButtonTheme
+                      // style: ElevatedButton.styleFrom(padding: ...) // Adjust padding if needed
                     ),
               ],
             ),

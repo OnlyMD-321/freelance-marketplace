@@ -14,6 +14,7 @@ import 'screens/applications/application_details_screen.dart'; // Import details
 import 'models/application.dart'; // Import Application model
 import 'screens/profile/edit_profile_screen.dart'; // Import EditProfileScreen
 import 'utils/routes.dart';
+import 'package:google_fonts/google_fonts.dart'; // Import Google Fonts
 
 void main() {
   runApp(const MyApp());
@@ -24,6 +25,81 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Define Color Scheme (Consider putting this in a separate theme file later)
+    final ColorScheme colorScheme = ColorScheme.fromSeed(
+      seedColor: const Color(0xFF4285F4), // Professional Blue
+      brightness: Brightness.light,
+      primary: const Color(0xFF4285F4),
+      // secondary: const Color(0xFF34A853), // Optional: Accent Green/Teal
+      background: const Color(0xFFF8F9FA), // Light Gray Background
+      surface: Colors.white, // Card/Input Background
+      onPrimary: Colors.white,
+      onSecondary: Colors.white,
+      onBackground: const Color(0xFF202124), // Dark text on background
+      onSurface: const Color(0xFF202124), // Dark text on surface
+      onError: Colors.white,
+    );
+
+    // Define Base Text Theme
+    final baseTextTheme = ThemeData(brightness: Brightness.light).textTheme;
+    final poppinsFont = GoogleFonts.poppinsTextTheme(baseTextTheme);
+    final latoFont = GoogleFonts.latoTextTheme(baseTextTheme);
+
+    // Combine fonts for a custom theme
+    final customTextTheme = baseTextTheme
+        .copyWith(
+          displayLarge: poppinsFont.displayLarge?.copyWith(
+            color: colorScheme.onSurface,
+          ),
+          displayMedium: poppinsFont.displayMedium?.copyWith(
+            color: colorScheme.onSurface,
+          ),
+          displaySmall: poppinsFont.displaySmall?.copyWith(
+            color: colorScheme.onSurface,
+          ),
+          headlineLarge: poppinsFont.headlineLarge?.copyWith(
+            color: colorScheme.onSurface,
+          ),
+          headlineMedium: poppinsFont.headlineMedium?.copyWith(
+            color: colorScheme.onSurface,
+          ),
+          headlineSmall: poppinsFont.headlineSmall?.copyWith(
+            color: colorScheme.onSurface,
+          ),
+          titleLarge: poppinsFont.titleLarge?.copyWith(
+            color: colorScheme.onSurface,
+          ),
+          titleMedium: latoFont.titleMedium?.copyWith(
+            color: colorScheme.onSurface,
+          ), // Lato for slightly smaller titles
+          titleSmall: latoFont.titleSmall?.copyWith(
+            color: colorScheme.onSurfaceVariant,
+          ),
+          bodyLarge: latoFont.bodyLarge?.copyWith(
+            color: colorScheme.onSurface,
+          ),
+          bodyMedium: latoFont.bodyMedium?.copyWith(
+            color: colorScheme.onSurfaceVariant,
+          ),
+          bodySmall: latoFont.bodySmall?.copyWith(
+            color: colorScheme.onSurfaceVariant.withOpacity(0.8),
+          ),
+          labelLarge: poppinsFont.labelLarge?.copyWith(
+            color: colorScheme.onPrimary,
+            fontWeight: FontWeight.bold,
+          ), // For buttons
+          labelMedium: latoFont.labelMedium?.copyWith(
+            color: colorScheme.onSurfaceVariant,
+          ),
+          labelSmall: latoFont.labelSmall?.copyWith(
+            color: colorScheme.onSurfaceVariant,
+          ),
+        )
+        .apply(
+          bodyColor: colorScheme.onSurface,
+          displayColor: colorScheme.onSurface,
+        );
+
     return MultiProvider(
       providers: [
         // Assume AuthProvider is independent
@@ -48,9 +124,105 @@ class MyApp extends StatelessWidget {
       child: Consumer<AuthProvider>(
         builder:
             (ctx, auth, _) => MaterialApp(
-              title: 'Freelancers App',
+              title: 'Freelance Marketplace',
               theme: ThemeData(
-                primarySwatch: Colors.blue,
+                colorScheme: colorScheme,
+                useMaterial3: true,
+                textTheme: customTextTheme, // Apply the custom text theme
+                // Define default AppBar theme (optional, can be overridden)
+                appBarTheme: AppBarTheme(
+                  backgroundColor:
+                      colorScheme.surface, // Use surface color for AppBar
+                  foregroundColor: colorScheme.onSurface, // Text/icon color
+                  elevation: 1.0, // Subtle shadow
+                  scrolledUnderElevation: 2.0,
+                  titleTextStyle: customTextTheme.titleLarge?.copyWith(
+                    // Use textTheme style
+                    fontWeight: FontWeight.w600,
+                  ),
+                  iconTheme: IconThemeData(color: colorScheme.primary),
+                ),
+                // Define default InputDecoration theme for TextFormFields
+                inputDecorationTheme: InputDecorationTheme(
+                  filled: true,
+                  fillColor: colorScheme.surface,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12.0),
+                    borderSide: BorderSide(
+                      color: colorScheme.outline.withOpacity(0.5),
+                    ),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12.0),
+                    borderSide: BorderSide(
+                      color: colorScheme.outline.withOpacity(0.5),
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12.0),
+                    borderSide: BorderSide(
+                      color: colorScheme.primary,
+                      width: 1.5,
+                    ), // Slightly thinner focused border
+                  ),
+                  labelStyle: customTextTheme.bodyMedium, // Use textTheme style
+                  floatingLabelStyle: customTextTheme.bodyMedium?.copyWith(
+                    color: colorScheme.primary,
+                  ), // Use textTheme style
+                  prefixIconColor: WidgetStateColor.resolveWith((
+                    Set<WidgetState> states,
+                  ) {
+                    if (states.contains(WidgetState.focused)) {
+                      return colorScheme.primary;
+                    }
+                    if (states.contains(WidgetState.error)) {
+                      return colorScheme.error;
+                    }
+                    return colorScheme.onSurfaceVariant;
+                  }),
+                ),
+                // Define default Button themes
+                elevatedButtonTheme: ElevatedButtonThemeData(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: colorScheme.primary,
+                    foregroundColor: colorScheme.onPrimary,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 14,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12.0),
+                    ),
+                    textStyle:
+                        customTextTheme.labelLarge, // Use textTheme style
+                  ),
+                ),
+                textButtonTheme: TextButtonThemeData(
+                  style: TextButton.styleFrom(
+                    foregroundColor: colorScheme.primary,
+                    textStyle: customTextTheme.labelMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ), // Use textTheme style
+                  ),
+                ),
+                // Define card theme
+                cardTheme: CardTheme(
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12.0),
+                  ),
+                  margin: const EdgeInsets.symmetric(
+                    vertical: 8,
+                    horizontal: 4,
+                  ),
+                  color: colorScheme.surface,
+                ),
+                // Define default Text theme (optional)
+                // textTheme: GoogleFonts.latoTextTheme(ThemeData(brightness: Brightness.light).textTheme), // Example using Google Fonts
                 visualDensity: VisualDensity.adaptivePlatformDensity,
               ),
               debugShowCheckedModeBanner: false,

@@ -7,8 +7,10 @@ import '../models/application.dart';
 class ApplicationProvider with ChangeNotifier {
   final ApplicationService _applicationService = ApplicationService();
 
-  List<Application> _myApplications = []; // Applications submitted by the current user (Worker)
-  List<Application> _jobApplications = []; // Applications for a specific job (Client view)
+  List<Application> _myApplications =
+      []; // Applications submitted by the current user (Worker)
+  List<Application> _jobApplications =
+      []; // Applications for a specific job (Client view)
   bool _isLoading = false;
   String? _errorMessage;
 
@@ -24,7 +26,9 @@ class ApplicationProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      _myApplications = await _applicationService.listApplications(); // No jobId means fetch user's own
+      _myApplications =
+          await _applicationService
+              .listApplications(); // No jobId means fetch user's own
     } catch (error) {
       _errorMessage = "Failed to fetch your applications: $error";
       _myApplications = [];
@@ -42,7 +46,9 @@ class ApplicationProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      _jobApplications = await _applicationService.listApplications(jobId: jobId);
+      _jobApplications = await _applicationService.listApplications(
+        jobId: jobId,
+      );
     } catch (error) {
       _errorMessage = "Failed to fetch applications for job $jobId: $error";
       _jobApplications = [];
@@ -78,16 +84,23 @@ class ApplicationProvider with ChangeNotifier {
   }
 
   // Update application status (Client)
-  Future<bool> updateApplicationStatus(String applicationId, ApplicationStatus status, String jobId) async {
+  Future<bool> updateApplicationStatus(
+    String applicationId,
+    ApplicationStatus status,
+    String jobId,
+  ) async {
     _isLoading = true; // Consider a more granular loading state if needed
     _errorMessage = null;
     notifyListeners();
 
     try {
-      final updatedApplication = await _applicationService.updateApplicationStatus(applicationId, status);
+      final updatedApplication = await _applicationService
+          .updateApplicationStatus(applicationId, status);
       if (updatedApplication != null) {
         // Update the list of job applications
-        final index = _jobApplications.indexWhere((app) => app.applicationId == applicationId);
+        final index = _jobApplications.indexWhere(
+          (app) => app.applicationId == applicationId,
+        );
         if (index != -1) {
           _jobApplications[index] = updatedApplication;
         } else {
@@ -99,6 +112,32 @@ class ApplicationProvider with ChangeNotifier {
       return false;
     } catch (error) {
       _errorMessage = "Failed to update status: ${error.toString()}";
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  // Withdraw an application (Worker)
+  Future<bool> withdrawApplication(String applicationId) async {
+    _isLoading = true; // Consider more granular loading state if needed
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final success = await _applicationService.withdrawApplication(
+        applicationId,
+      );
+      if (success) {
+        // Remove the application from the local list
+        _myApplications.removeWhere(
+          (app) => app.applicationId == applicationId,
+        );
+      }
+      return success;
+    } catch (error) {
+      _errorMessage = "Failed to withdraw application: ${error.toString()}";
       return false;
     } finally {
       _isLoading = false;

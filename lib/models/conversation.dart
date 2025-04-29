@@ -1,6 +1,4 @@
-// filepath: Mobile/lib/models/conversation.dart
 import 'user.dart'; // Assuming UserInfo holds basic user details
-import 'package:intl/intl.dart'; // Import for potential date formatting
 
 class Conversation {
   final String conversationId;

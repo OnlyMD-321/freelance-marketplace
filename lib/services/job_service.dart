@@ -30,7 +30,9 @@ class JobService {
       if (status != null) 'status': status,
       if (search != null && search.isNotEmpty) 'search': search,
     };
-    final url = Uri.parse('$apiBaseUrl/jobs').replace(queryParameters: queryParams);
+    final url = Uri.parse(
+      '$apiBaseUrl/jobs',
+    ).replace(queryParameters: queryParams);
 
     try {
       final headers = await _getHeaders();
@@ -52,6 +54,55 @@ class JobService {
     }
   }
 
+  // List Jobs Posted by the Current (Client) User
+  Future<List<Job>> listMyJobs({int limit = 10, int offset = 0}) async {
+    // Assuming backend route /jobs/my or /jobs filters by authenticated user
+    final queryParams = {
+      'limit': limit.toString(),
+      'offset': offset.toString(),
+    };
+    // Option 1: Use a dedicated route like /jobs/my
+    // final url = Uri.parse('$apiBaseUrl/jobs/my').replace(queryParameters: queryParams);
+    // Option 2: Assume /jobs filters by auth if no specific client ID is given
+    final url = Uri.parse(
+      '$apiBaseUrl/jobs',
+    ).replace(queryParameters: queryParams);
+    // Choose ONE of the above URL options based on backend implementation
+
+    try {
+      final headers = await _getHeaders(); // Use authenticated headers
+      final response = await http.get(url, headers: headers);
+
+      if (response.statusCode == 200) {
+        final responseData = jsonDecode(response.body);
+        // Check if the response structure is the same as listJobs
+        if (responseData is Map<String, dynamic> &&
+            responseData.containsKey('jobs')) {
+          final List<dynamic> jobListJson = responseData['jobs'];
+          return jobListJson.map((json) => Job.fromJson(json)).toList();
+        } else if (responseData is List) {
+          // Handle if backend just returns a list for /my route
+          return responseData
+              .map((json) => Job.fromJson(json as Map<String, dynamic>))
+              .toList();
+        } else {
+          print(
+            'Failed to list user jobs: Unexpected response format ${response.body}',
+          );
+          return [];
+        }
+      } else {
+        print(
+          'Failed to list user jobs: ${response.statusCode} ${response.body}',
+        );
+        return []; // Return empty list on failure
+      }
+    } catch (error) {
+      print('Error listing user jobs: $error');
+      return []; // Return empty list on error
+    }
+  }
+
   // Get Job Details
   Future<Job?> getJobDetails(String jobId) async {
     final url = Uri.parse('$apiBaseUrl/jobs/$jobId');
@@ -63,7 +114,9 @@ class JobService {
         final responseData = jsonDecode(response.body);
         return Job.fromJson(responseData);
       } else {
-        print('Failed to get job details: ${response.statusCode} ${response.body}');
+        print(
+          'Failed to get job details: ${response.statusCode} ${response.body}',
+        );
         return null;
       }
     } catch (error) {
@@ -95,9 +148,9 @@ class JobService {
         final responseData = jsonDecode(response.body);
         return Job.fromJson(responseData);
       } else {
-         print('Failed to create job: ${response.statusCode} ${response.body}');
-         // Consider returning error message from response body
-         return null;
+        print('Failed to create job: ${response.statusCode} ${response.body}');
+        // Consider returning error message from response body
+        return null;
       }
     } catch (error) {
       print('Error creating job: $error');

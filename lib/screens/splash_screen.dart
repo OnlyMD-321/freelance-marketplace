@@ -5,22 +5,35 @@ class SplashScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    // Widget to display logo or fallback
+    Widget logoWidget;
+    try {
+      // Attempt to load the logo
+      logoWidget = Image.asset('assets/images/logo.png', height: 150);
+    } catch (e) {
+       print("Splash screen logo not found or failed to load: $e");
+       // Fallback widget if logo fails
+       logoWidget = Icon(Icons.workspaces_outline, size: 80, color: colorScheme.primary);
+    }
+
     return Scaffold(
-      body: Center(
-        // You can customize this further, e.g., add your logo
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // Optional: Add your logo
-            // Make sure 'assets/images/logo.png' exists and is declared in pubspec.yaml
-            Image.asset('assets/images/logo.png', height: 120),
-            const SizedBox(height: 20),
-            const CircularProgressIndicator(),
-            const SizedBox(height: 10),
-            const Text("Loading..."),
-          ],
-        ),
-      ),
+       backgroundColor: colorScheme.surface, // Use theme surface color
+       body: Center(
+         child: Column(
+           mainAxisAlignment: MainAxisAlignment.center,
+           children: [
+             logoWidget, // Display the logo or fallback
+             const SizedBox(height: 40),
+             CircularProgressIndicator(
+               valueColor: AlwaysStoppedAnimation<Color>(colorScheme.primary), // Use primary color
+             ),
+             // Removed the "Loading..." text
+           ],
+         ),
+       ),
     );
   }
 }

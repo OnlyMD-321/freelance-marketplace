@@ -153,12 +153,13 @@ class AuthProvider with ChangeNotifier {
 
   Future<void> signOut() async {
     _isLoading = true;
-    notifyListeners();
+    notifyListeners(); // Notify loading start
     _token = null;
     _currentUser = null; // Clear user data
     await _authService.signOut(); // Calls storageService.deleteToken()
     _isLoading = false;
-    notifyListeners();
+    // Remove the final notifyListeners - state change (_token = null) is the main trigger
+    // notifyListeners();
   }
 
   Future<bool> updateUserProfile(Map<String, dynamic> updates) async {
@@ -188,6 +189,45 @@ class AuthProvider with ChangeNotifier {
         return false;
       }
     } catch (error) {
+      _errorMessage = error.toString();
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  // Delete User Account
+  Future<bool> deleteMyAccount() async {
+    if (!isAuthenticated) {
+      _errorMessage = "Not logged in.";
+      notifyListeners();
+      return false;
+    }
+
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final success = await _authService.deleteMyAccount();
+      if (success) {
+        // If backend deletion is successful, clear local state and log out
+        _token = null;
+        _currentUser = null;
+        // Note: AuthService.deleteMyAccount already clears the token from storage
+        print("[AuthProvider] Account deleted successfully, logging out.");
+        _isLoading = false;
+        notifyListeners(); // Notify listeners to update UI (e.g., navigate away)
+        return true;
+      } else {
+        // This path might not be reachable if service throws exceptions
+        _errorMessage = "Failed to delete account.";
+        _isLoading = false;
+        notifyListeners();
+        return false;
+      }
+    } catch (error) {
+      print("[AuthProvider] Error deleting account: $error");
       _errorMessage = error.toString();
       _isLoading = false;
       notifyListeners();

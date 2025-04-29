@@ -15,35 +15,38 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   bool _isLoading = false;
   User? _currentUser; // Make currentUser nullable
 
-  // Controllers for editable fields
-  // Initialize directly in initState
-  final TextEditingController _usernameController = TextEditingController();
-  final TextEditingController _bioController = TextEditingController();
-  final TextEditingController _skillsController = TextEditingController();
-  final TextEditingController _phoneController = TextEditingController();
-  final TextEditingController _cityController = TextEditingController();
-  final TextEditingController _countryController = TextEditingController();
+  // Use late initialization for controllers bound to initial user data
+  late TextEditingController _usernameController;
+  late TextEditingController _bioController;
+  late TextEditingController _skillsController;
+  late TextEditingController _phoneController;
+  late TextEditingController _cityController;
+  late TextEditingController _countryController;
 
   @override
   void initState() {
     super.initState();
-    // Directly access the provider data (listen: false is crucial here)
-    // This assumes AuthProvider already has the user data when this screen is pushed.
     _currentUser =
         Provider.of<AuthProvider>(context, listen: false).currentUser;
 
-    // Initialize controllers if currentUser is available
-    if (_currentUser != null) {
-      _usernameController.text = _currentUser!.username;
-      _bioController.text = _currentUser!.bio ?? '';
-      _skillsController.text = _currentUser!.skillsSummary ?? '';
-      _phoneController.text = _currentUser!.phoneNumber ?? '';
-      _cityController.text = _currentUser!.city ?? '';
-      _countryController.text = _currentUser!.country ?? '';
-    } else {
-      // Handle case where user data isn't available (should ideally not happen if navigation is correct)
-      print("Error: EditProfileScreen initialized without currentUser data.");
-      // Optionally show an error or pop the screen after build
+    // Initialize controllers
+    _usernameController = TextEditingController(
+      text: _currentUser?.username ?? '',
+    );
+    _bioController = TextEditingController(text: _currentUser?.bio ?? '');
+    _skillsController = TextEditingController(
+      text: _currentUser?.skillsSummary ?? '',
+    );
+    _phoneController = TextEditingController(
+      text: _currentUser?.phoneNumber ?? '',
+    );
+    _cityController = TextEditingController(text: _currentUser?.city ?? '');
+    _countryController = TextEditingController(
+      text: _currentUser?.country ?? '',
+    );
+
+    if (_currentUser == null) {
+      // Handle missing user data immediately
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -70,89 +73,113 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   Future<void> _saveProfile() async {
-    // Ensure _currentUser is not null before proceeding
     if (_currentUser == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Error: User data not available.')),
       );
       return;
     }
+    // Hide keyboard
+    FocusScope.of(context).unfocus();
+
     if (_formKey.currentState!.validate() && !_isLoading) {
       setState(() {
         _isLoading = true;
       });
 
-      // Collect updated data - only include fields that have changed
+      // Collect updates - handle potential null values from empty text fields
       final Map<String, dynamic> updates = {};
-      // Use _currentUser! safely now because we checked for null above
-      if (_usernameController.text != _currentUser!.username) {
-        updates['username'] = _usernameController.text;
-      }
-      if (_bioController.text != (_currentUser!.bio ?? '')) {
-        updates['bio'] =
-            _bioController.text.isEmpty ? null : _bioController.text;
-      }
-      if (_skillsController.text != (_currentUser!.skillsSummary ?? '')) {
-        updates['skillsSummary'] =
-            _skillsController.text.isEmpty ? null : _skillsController.text;
-      }
-      if (_phoneController.text != (_currentUser!.phoneNumber ?? '')) {
-        updates['phoneNumber'] =
-            _phoneController.text.isEmpty ? null : _phoneController.text;
-      }
-      if (_cityController.text != (_currentUser!.city ?? '')) {
-        updates['city'] =
-            _cityController.text.isEmpty ? null : _cityController.text;
-      }
-      if (_countryController.text != (_currentUser!.country ?? '')) {
-        updates['country'] =
-            _countryController.text.isEmpty ? null : _countryController.text;
-      }
+      _addUpdate(
+        updates,
+        'username',
+        _usernameController.text,
+        _currentUser!.username,
+      );
+      _addUpdate(updates, 'bio', _bioController.text, _currentUser!.bio);
+      _addUpdate(
+        updates,
+        'skillsSummary',
+        _skillsController.text,
+        _currentUser!.skillsSummary,
+      );
+      _addUpdate(
+        updates,
+        'phoneNumber',
+        _phoneController.text,
+        _currentUser!.phoneNumber,
+      );
+      _addUpdate(updates, 'city', _cityController.text, _currentUser!.city);
+      _addUpdate(
+        updates,
+        'country',
+        _countryController.text,
+        _currentUser!.country,
+      );
 
       if (updates.isEmpty) {
         setState(() {
           _isLoading = false;
         });
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('No changes detected.')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No changes detected.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
         return;
       }
 
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      final success = await authProvider.updateUserProfile(updates);
+      bool success = false;
+      try {
+        success = await authProvider.updateUserProfile(updates);
+      } catch (e) {
+        success = false;
+        print("Error updating profile: $e");
+      }
 
       if (!mounted) return;
-
       setState(() {
         _isLoading = false;
       });
 
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            success
+                ? 'Profile updated successfully!'
+                : (authProvider.errorMessage ?? 'Failed to update profile.'),
+          ),
+          backgroundColor:
+              success ? Colors.green : Theme.of(context).colorScheme.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+
       if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Profile updated successfully!'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        Navigator.of(context).pop(); // Go back to profile screen
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              authProvider.errorMessage ?? 'Failed to update profile.',
-            ),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
-        );
+        Navigator.of(context).pop(); // Go back on success
       }
+    }
+  }
+
+  // Helper to add updates only if changed, handling nulls for empty strings
+  void _addUpdate(
+    Map<String, dynamic> updates,
+    String key,
+    String newValue,
+    String? originalValue,
+  ) {
+    final String effectiveOriginal = originalValue ?? '';
+    final String trimmedNewValue = newValue.trim();
+    if (trimmedNewValue != effectiveOriginal) {
+      updates[key] = trimmedNewValue.isEmpty ? null : trimmedNewValue;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Handle the case where currentUser might still be null initially
     if (_currentUser == null) {
+      // Show loading/error state if initialization failed
       return Scaffold(
         appBar: AppBar(title: const Text('Edit Profile')),
         body: const Center(child: CircularProgressIndicator()),
@@ -165,97 +192,130 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       appBar: AppBar(
         title: const Text('Edit Profile'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.save),
-            tooltip: 'Save Changes',
-            onPressed: _isLoading ? null : _saveProfile,
-          ),
+          _isLoading
+              ? const Padding(
+                padding: EdgeInsets.all(16.0),
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              )
+              : IconButton(
+                icon: const Icon(Icons.save_outlined),
+                tooltip: 'Save Changes',
+                onPressed: _saveProfile,
+              ),
         ],
       ),
-      body: Builder(
-        builder: (context) {
-          return Stack(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Form(
-                  key: _formKey,
-                  child: ListView(
-                    children: <Widget>[
-                      TextFormField(
-                        controller: _usernameController,
-                        decoration: const InputDecoration(
-                          labelText: 'Username',
-                        ),
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return 'Username cannot be empty';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: _phoneController,
-                        decoration: const InputDecoration(
-                          labelText: 'Phone Number (Optional)',
-                        ),
-                        keyboardType: TextInputType.phone,
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: _cityController,
-                        decoration: const InputDecoration(
-                          labelText: 'City (Optional)',
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: _countryController,
-                        decoration: const InputDecoration(
-                          labelText: 'Country (Optional)',
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      if (userType == UserType.worker) ...[
-                        TextFormField(
-                          controller: _bioController,
-                          decoration: const InputDecoration(
-                            labelText: 'Bio (Optional)',
-                            alignLabelWithHint: true,
-                          ),
-                          maxLines: 3,
-                          minLines: 1,
-                        ),
-                        const SizedBox(height: 16),
-                        TextFormField(
-                          controller: _skillsController,
-                          decoration: const InputDecoration(
-                            labelText: 'Skills Summary (Optional)',
-                            alignLabelWithHint: true,
-                          ),
-                          maxLines: 3,
-                          minLines: 1,
-                        ),
-                        const SizedBox(height: 16),
-                      ],
-                      const SizedBox(height: 32),
-                      ElevatedButton(
-                        onPressed: _isLoading ? null : _saveProfile,
-                        child: const Text('Save Changes'),
-                      ),
-                    ],
-                  ),
-                ),
+      body: Form(
+        key: _formKey,
+        child: ListView(
+          // Use ListView for scrolling long forms
+          padding: const EdgeInsets.all(16.0),
+          children: <Widget>[
+            _buildSectionHeader(context, 'Personal Information'),
+            TextFormField(
+              controller: _usernameController,
+              decoration: const InputDecoration(
+                labelText: 'Username',
+                prefixIcon: Icon(Icons.person_outline),
               ),
-              if (_isLoading)
-                Container(
-                  color: Colors.black.withOpacity(0.5),
-                  child: const Center(child: CircularProgressIndicator()),
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) {
+                  return 'Username cannot be empty';
+                }
+                return null;
+              },
+              textInputAction: TextInputAction.next,
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _phoneController,
+              decoration: const InputDecoration(
+                labelText: 'Phone Number',
+                hintText: '(Optional)',
+                prefixIcon: Icon(Icons.phone_outlined),
+              ),
+              keyboardType: TextInputType.phone,
+              textInputAction: TextInputAction.next,
+            ),
+            const SizedBox(height: 24),
+
+            _buildSectionHeader(context, 'Location'),
+            TextFormField(
+              controller: _cityController,
+              decoration: const InputDecoration(
+                labelText: 'City',
+                hintText: '(Optional)',
+                prefixIcon: Icon(Icons.location_city_outlined),
+              ),
+              textInputAction: TextInputAction.next,
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _countryController,
+              decoration: const InputDecoration(
+                labelText: 'Country',
+                hintText: '(Optional)',
+                prefixIcon: Icon(Icons.flag_outlined),
+              ),
+              textInputAction:
+                  userType == UserType.worker
+                      ? TextInputAction.next
+                      : TextInputAction.done,
+            ),
+            const SizedBox(height: 24),
+
+            // --- Worker Specific Fields ---
+            if (userType == UserType.worker) ...[
+              _buildSectionHeader(context, 'Professional Details'),
+              TextFormField(
+                controller: _bioController,
+                decoration: const InputDecoration(
+                  labelText: 'Bio / Tagline',
+                  hintText: 'A short description about you (Optional)',
+                  prefixIcon: Icon(Icons.text_snippet_outlined),
+                  alignLabelWithHint: true,
                 ),
+                maxLines: 4,
+                minLines: 2,
+                textCapitalization: TextCapitalization.sentences,
+                textInputAction: TextInputAction.newline,
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _skillsController,
+                decoration: const InputDecoration(
+                  labelText: 'Skills Summary',
+                  hintText: 'List your key skills (Optional)',
+                  prefixIcon: Icon(Icons.star_border_outlined),
+                  alignLabelWithHint: true,
+                ),
+                maxLines: 4,
+                minLines: 2,
+                textCapitalization: TextCapitalization.sentences,
+                textInputAction: TextInputAction.newline,
+              ),
+              const SizedBox(height: 16),
             ],
-          );
-        },
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Helper to build section headers
+  Widget _buildSectionHeader(BuildContext context, String title) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(top: 16.0, bottom: 8.0),
+      child: Text(
+        title,
+        style: theme.textTheme.titleMedium?.copyWith(
+          fontWeight: FontWeight.bold,
+          color: theme.colorScheme.primary,
+        ),
       ),
     );
   }

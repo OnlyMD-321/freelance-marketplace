@@ -1,12 +1,13 @@
 // filepath: Mobile/freelancers_mobile_app/lib/screens/jobs/job_details_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/intl.dart'; // For formatting
 import '../../providers/job_provider.dart';
-import '../../providers/auth_provider.dart'; // To check user type
-import '../../providers/application_provider.dart'; // Import ApplicationProvider
+import '../../providers/auth_provider.dart';
+import '../../providers/application_provider.dart';
 import '../../models/job.dart';
-// For UserType enum
-import '../applications/application_list_screen.dart'; // Import ApplicationListScreen
+import '../../models/user.dart'; // For UserType enum
+import '../applications/application_list_screen.dart';
 
 class JobDetailsScreen extends StatefulWidget {
   final String jobId;
@@ -17,28 +18,36 @@ class JobDetailsScreen extends StatefulWidget {
 }
 
 class _JobDetailsScreenState extends State<JobDetailsScreen> {
-  bool _isApplying = false; // Local state for apply button loading
+  bool _isApplying = false;
 
   @override
   void initState() {
     super.initState();
-    // Fetch job details when the screen loads
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _fetchDetails();
     });
   }
 
   Future<void> _fetchDetails() async {
-    final jobProvider = Provider.of<JobProvider>(context, listen: false);
-    await jobProvider.fetchJobDetails(widget.jobId);
+    // Added try-catch for better error handling during fetch
+    try {
+      final jobProvider = Provider.of<JobProvider>(context, listen: false);
+      await jobProvider.fetchJobDetails(widget.jobId);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load job details: $e'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    }
   }
 
   @override
   void dispose() {
-    // Clear the selected job in the provider when leaving the screen
-    // Do this in a post-frame callback to avoid issues during build
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // Check if mounted before accessing provider
       if (mounted) {
         Provider.of<JobProvider>(context, listen: false).clearSelectedJob();
       }
@@ -47,8 +56,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
   }
 
   Future<void> _applyForJob() async {
-    if (_isApplying) return; // Prevent double taps
-
+    if (_isApplying) return;
     setState(() {
       _isApplying = true;
     });
@@ -57,181 +65,183 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
       context,
       listen: false,
     );
-    final success = await appProvider.applyForJob(widget.jobId);
+    bool success = false;
+    try {
+      success = await appProvider.applyForJob(widget.jobId);
+    } catch (e) {
+      success = false;
+      print("Error applying for job: $e");
+    }
 
-    // Check if mounted before showing SnackBar or changing state
     if (!mounted) return;
 
     setState(() {
       _isApplying = false;
     });
 
-    if (success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Application submitted successfully!'),
-          backgroundColor: Colors.green,
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          success
+              ? 'Application submitted successfully!'
+              : appProvider.errorMessage ?? 'Failed to submit application.',
         ),
-      );
-      // Optionally disable the button or change its text after successful application
-      // You might need to add state to track if the user has already applied
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            appProvider.errorMessage ?? 'Failed to submit application.',
-          ),
-          backgroundColor: Theme.of(context).colorScheme.error,
-        ),
-      );
-    }
+        backgroundColor:
+            success ? Colors.green : Theme.of(context).colorScheme.error,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   void _viewApplications() {
-    // Navigate to ApplicationListScreen filtered by this jobId
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => ApplicationListScreen(jobId: widget.jobId),
       ),
     );
-    // Or using named routes if you set up onGenerateRoute:
-    // Navigator.of(context).pushNamed(AppRoutes.applications, arguments: widget.jobId);
   }
 
   @override
   Widget build(BuildContext context) {
-    // Use Consumer for JobProvider and AuthProvider
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final textTheme = theme.textTheme;
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Job Details')),
+      appBar: AppBar(
+        // AppBar styling is inherited from main.dart
+        title: const Text('Job Details'), // Keep a simple title
+      ),
       body: Consumer2<JobProvider, AuthProvider>(
-        // Consume both providers
         builder: (ctx, jobProvider, authProvider, child) {
           final job = jobProvider.selectedJob;
-          final isLoading = jobProvider.isLoading;
-          final errorMessage = jobProvider.errorMessage;
+          final isLoadingJob = jobProvider.isLoading;
+          final errorMessageJob = jobProvider.errorMessage;
+          final currentUser = authProvider.currentUser;
 
-          if (isLoading && job == null) {
+          // --- Loading State ---
+          if ((isLoadingJob) && job == null) {
             return const Center(child: CircularProgressIndicator());
           }
 
-          if (errorMessage != null && job == null) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text('Error: $errorMessage'),
-                  const SizedBox(height: 10),
-                  ElevatedButton(
-                    onPressed: _fetchDetails,
-                    child: const Text('Retry'),
-                  ),
-                ],
-              ),
+          // --- Error State ---
+          if (errorMessageJob != null && job == null) {
+            return _buildErrorWidget(context, errorMessageJob, _fetchDetails);
+          }
+
+          // --- Job Not Found State ---
+          if (job == null) {
+            return _buildErrorWidget(
+              context,
+              'Job details not found.',
+              _fetchDetails,
             );
           }
 
-          if (job == null) {
-            // Should ideally not happen if loading/error states are handled
-            return const Center(child: Text('Job details not available.'));
-          }
-
-          // Determine if the current user is the client who posted the job
-          // This requires AuthProvider to hold the current user's ID and type
-          bool isOwner =
-              false; // Replace with: authProvider.currentUser?.userId == job.clientId;
-          bool isWorker =
-              true; // Replace with: authProvider.currentUser?.userType == UserType.worker;
-
-          // TODO: Add logic to check if the worker has *already* applied for this job
-          bool hasAlreadyApplied = false; // Placeholder
+          // Determine user roles relative to the job
+          final bool isOwner = currentUser?.userId == job.clientId;
+          final bool isWorker = currentUser?.userType == UserType.worker;
+          // Application button states are now handled by _isApplying
 
           return RefreshIndicator(
             onRefresh: _fetchDetails,
+            color: colorScheme.primary,
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(16.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // --- Job Title and Client ---
                   Text(
                     job.title,
-                    style: Theme.of(context).textTheme.headlineMedium,
+                    style: textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const SizedBox(height: 8),
-                  Text(
-                    'Posted by: ${job.client?.username ?? job.clientId}',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Status: ${job.status.name}',
-                    style: TextStyle(color: _getStatusColor(job.status)),
-                  ),
-                  if (job.budget != null) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      'Budget: \$${job.budget!.toStringAsFixed(2)}',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                  ],
-                  if (job.deadline != null) ...[
-                    const SizedBox(height: 8),
-                    // TODO: Format date nicely
-                    Text('Deadline: ${job.deadline.toString()}'),
-                  ],
-                  const SizedBox(height: 16),
-                  const Divider(),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Description',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(job.description),
-                  const SizedBox(height: 32),
-
-                  // Action Buttons (Conditional)
-                  if (isWorker &&
-                      job.status == JobStatus.open &&
-                      !hasAlreadyApplied)
-                    Center(
-                      child:
-                          _isApplying
-                              ? const CircularProgressIndicator() // Show loading on button
-                              : ElevatedButton.icon(
-                                icon: const Icon(Icons.send),
-                                label: const Text('Apply Now'),
-                                onPressed:
-                                    _applyForJob, // Use the updated method
-                                style: ElevatedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 30,
-                                    vertical: 15,
-                                  ),
-                                ),
-                              ),
-                    ),
-                  if (isWorker &&
-                      hasAlreadyApplied) // Show message if already applied
-                    const Center(
-                      child: Text(
-                        "You have already applied for this job.",
-                        style: TextStyle(color: Colors.grey),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.business_center_outlined,
+                        size: 18,
+                        color: colorScheme.secondary,
                       ),
-                    ),
-                  if (isOwner)
-                    Center(
-                      child: ElevatedButton.icon(
-                        icon: const Icon(Icons.list_alt),
-                        label: const Text('View Applications'),
-                        onPressed: _viewApplications,
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 30,
-                            vertical: 15,
-                          ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Posted by: ${job.client?.username ?? 'Client ID: ${job.clientId}'}',
+                        style: textTheme.titleMedium?.copyWith(
+                          color: colorScheme.secondary,
                         ),
                       ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  const Divider(),
+
+                  // --- Key Information Section ---
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 16.0),
+                    child: Column(
+                      children: [
+                        _buildInfoRow(
+                          context,
+                          Icons.label_important_outline,
+                          'Status',
+                          job.status.name,
+                          color: _getStatusColor(job.status, colorScheme),
+                        ),
+                        if (job.budget != null)
+                          _buildInfoRow(
+                            context,
+                            Icons.attach_money,
+                            'Budget',
+                            NumberFormat.currency(
+                              locale: 'en_US',
+                              symbol: '\$',
+                            ).format(job.budget!),
+                          ),
+                        _buildInfoRow(
+                          context,
+                          Icons.calendar_today_outlined,
+                          'Posted',
+                          DateFormat.yMMMd().format(job.postedDate.toLocal()),
+                        ),
+                        if (job.deadline != null)
+                          _buildInfoRow(
+                            context,
+                            Icons.timer_outlined,
+                            'Deadline',
+                            DateFormat.yMMMd().format(job.deadline!.toLocal()),
+                          ),
+                      ],
                     ),
+                  ),
+                  const Divider(),
+
+                  // --- Description Section ---
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Description',
+                          style: textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          job.description,
+                          style: textTheme.bodyLarge?.copyWith(height: 1.5),
+                        ), // Improved line height
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+
+                  // --- Action Button Area ---
+                  _buildActionButtons(context, isOwner, isWorker, job.status),
                 ],
               ),
             ),
@@ -241,19 +251,156 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
     );
   }
 
-  // Helper function for status color
-  Color _getStatusColor(JobStatus status) {
+  // --- Helper Widget for Info Row ---
+  Widget _buildInfoRow(
+    BuildContext context,
+    IconData icon,
+    String label,
+    String value, {
+    Color? color,
+  }) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6.0),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: color ?? theme.colorScheme.primary),
+          const SizedBox(width: 12),
+          Text(
+            '$label:',
+            style: theme.textTheme.titleSmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              value,
+              style: theme.textTheme.bodyLarge?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: color,
+              ),
+              textAlign: TextAlign.end,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- Helper Widget for Action Buttons ---
+  Widget _buildActionButtons(
+    BuildContext context,
+    bool isOwner,
+    bool isWorker,
+    JobStatus jobStatus,
+  ) {
+    final theme = Theme.of(context);
+
+    // Case 1: Worker viewing an open job
+    if (isWorker && jobStatus == JobStatus.open) {
+      return Center(
+        child:
+            _isApplying
+                ? const CircularProgressIndicator()
+                : ElevatedButton.icon(
+                  icon: const Icon(Icons.send),
+                  label: const Text('Apply Now'),
+                  onPressed: _isApplying ? null : _applyForJob,
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 30,
+                      vertical: 15,
+                    ),
+                    backgroundColor:
+                        _isApplying ? Colors.grey : theme.colorScheme.primary,
+                  ),
+                ),
+      );
+    }
+    // Case 2: Owner viewing their job (any status)
+    else if (isOwner) {
+      return Center(
+        child: ElevatedButton.icon(
+          icon: const Icon(Icons.list_alt),
+          label: const Text('View Applications'),
+          onPressed: _viewApplications,
+          style: ElevatedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+          ),
+        ),
+      );
+    }
+    // Case 3: Worker viewing a non-open job or non-worker/non-owner viewing
+    else {
+      // Optionally show a message or just nothing
+      if (isWorker && jobStatus != JobStatus.open) {
+        return Center(
+          child: Text(
+            'Applications are closed for this job.',
+            style: theme.textTheme.bodyMedium,
+          ),
+        );
+      }
+      return const SizedBox.shrink(); // Show nothing by default
+    }
+  }
+
+  // Helper function for status color (consistent with list view potentially)
+  Color _getStatusColor(JobStatus status, ColorScheme colorScheme) {
     switch (status) {
       case JobStatus.open:
-        return Colors.green;
+        return Colors.green.shade700;
       case JobStatus.inProgress:
-        return Colors.blue;
+        return Colors.blue.shade700;
       case JobStatus.completed:
-        return Colors.grey;
+        return colorScheme.primary;
       case JobStatus.cancelled:
-        return Colors.red;
+        return colorScheme.error;
       default:
-        return Colors.black;
+        return colorScheme.onSurfaceVariant;
     }
+  }
+
+  // --- Helper Widget for Error State ---
+  Widget _buildErrorWidget(
+    BuildContext context,
+    String message,
+    VoidCallback onRetry,
+  ) {
+    final theme = Theme.of(context);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.error_outline, color: theme.colorScheme.error, size: 60),
+            const SizedBox(height: 16),
+            Text(
+              'Could Not Load Job',
+              style: theme.textTheme.headlineSmall,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              message,
+              style: theme.textTheme.bodyMedium,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Retry'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: theme.colorScheme.errorContainer,
+                foregroundColor: theme.colorScheme.onErrorContainer,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

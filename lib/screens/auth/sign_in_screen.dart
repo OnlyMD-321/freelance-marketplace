@@ -16,6 +16,7 @@ class _SignInScreenState extends State<SignInScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
+  bool _isPasswordVisible = false; // State for password visibility
 
   @override
   void dispose() {
@@ -75,13 +76,16 @@ class _SignInScreenState extends State<SignInScreen> {
         setState(() {
           _isLoading = false;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            // Use the message from the provider if available
-            content: Text(message ?? 'Sign in failed. Check credentials.'),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
-        );
+        // Use a less intrusive error display if possible, but SnackBar is okay
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(message ?? 'Sign in failed. Check credentials.'),
+              backgroundColor: Theme.of(context).colorScheme.error,
+              behavior: SnackBarBehavior.floating, // Make it float
+            ),
+          );
+        }
       } else {
         print(
           "[_SignInScreen] Sign in successful. Letting AuthProvider handle navigation.",
@@ -108,71 +112,192 @@ class _SignInScreenState extends State<SignInScreen> {
   }
 
   void _navigateToSignUp() {
-    // Use named routes
-    Navigator.of(context).pushNamed(AppRoutes.signUp);
+    // Use named routes for better practice
+    Navigator.of(context).pushReplacementNamed(
+      AppRoutes.signUp,
+    ); // Use pushReplacement if you don't want users going back to sign in
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final textTheme = theme.textTheme;
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Sign In')),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Form(
-          key: _formKey,
+      // Remove AppBar for a cleaner auth screen look
+      // appBar: AppBar(title: const Text('Sign In')),
+      backgroundColor: colorScheme.surface, // Use theme background
+      body: SafeArea(
+        // Ensure content avoids notches/system areas
+        child: Center(
           child: SingleChildScrollView(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: <Widget>[
-                // Optional: Add logo back if needed
-                // Image.asset('assets/images/logo.png', height: 100),
-                const SizedBox(height: 24),
-                TextFormField(
-                  controller: _emailController,
-                  decoration: const InputDecoration(
-                    labelText: 'Email',
-                    border: OutlineInputBorder(),
-                  ),
-                  keyboardType: TextInputType.emailAddress,
-                  validator: (value) {
-                    if (value == null ||
-                        value.isEmpty ||
-                        !value.contains('@')) {
-                      return 'Please enter a valid email';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _passwordController,
-                  decoration: const InputDecoration(
-                    labelText: 'Password',
-                    border: OutlineInputBorder(),
-                  ),
-                  obscureText: true,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter your password';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 32),
-                _isLoading
-                    ? const CircularProgressIndicator()
-                    : ElevatedButton(
-                      onPressed: _submitSignIn,
-                      style: ElevatedButton.styleFrom(
-                        minimumSize: const Size(double.infinity, 50),
-                      ), // Make button wider
-                      child: const Text('Sign In'),
+            padding: const EdgeInsets.all(24.0), // Increased padding
+            child: Form(
+              key: _formKey,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment:
+                    CrossAxisAlignment.stretch, // Stretch children horizontally
+                children: <Widget>[
+                  // Optional: Add logo or App Name Title
+                  Text(
+                    'Welcome Back',
+                    style: textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: colorScheme.primary,
                     ),
-                TextButton(
-                  onPressed: _isLoading ? null : _navigateToSignUp,
-                  child: const Text('Don\'t have an account? Sign Up'),
-                ),
-              ],
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Sign in to your account',
+                    style: textTheme.titleMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 40), // Increased spacing
+                  // Email Field
+                  TextFormField(
+                    controller: _emailController,
+                    decoration: InputDecoration(
+                      labelText: 'Email',
+                      prefixIcon: Icon(
+                        Icons.email_outlined,
+                        color: colorScheme.primary,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(
+                          12.0,
+                        ), // Rounded corners
+                        borderSide: BorderSide(color: colorScheme.outline),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12.0),
+                        borderSide: BorderSide(
+                          color: colorScheme.outline.withOpacity(0.5),
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12.0),
+                        borderSide: BorderSide(
+                          color: colorScheme.primary,
+                          width: 2,
+                        ),
+                      ),
+                      filled: true,
+                      fillColor: colorScheme.surface, // Subtle background
+                    ),
+                    keyboardType: TextInputType.emailAddress,
+                    validator: (value) {
+                      if (value == null ||
+                          value.isEmpty ||
+                          !value.contains('@')) {
+                        return 'Please enter a valid email';
+                      }
+                      return null;
+                    },
+                    textInputAction:
+                        TextInputAction.next, // Go to password field
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Password Field
+                  TextFormField(
+                    controller: _passwordController,
+                    decoration: InputDecoration(
+                      labelText: 'Password',
+                      prefixIcon: Icon(
+                        Icons.lock_outline,
+                        // color: colorScheme.primary, // Handled by InputDecorationTheme
+                      ),
+                      // Add suffix icon for visibility toggle
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _isPasswordVisible
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
+                          color:
+                              colorScheme
+                                  .onSurfaceVariant, // Adjust color as needed
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _isPasswordVisible = !_isPasswordVisible;
+                          });
+                        },
+                      ),
+                      // border, enabledBorder, focusedBorder, filled, fillColor - Handled by InputDecorationTheme
+                    ),
+                    obscureText: !_isPasswordVisible, // Toggle based on state
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter your password';
+                      }
+                      return null;
+                    },
+                    textInputAction: TextInputAction.done, // Submit form
+                    onFieldSubmitted:
+                        (_) => _isLoading ? null : _submitSignIn(),
+                  ),
+                  // Optional: Add "Forgot Password?" button here later
+                  const SizedBox(height: 32),
+
+                  // Sign In Button / Loading Indicator
+                  _isLoading
+                      ? const Center(child: CircularProgressIndicator())
+                      : ElevatedButton(
+                        onPressed: _submitSignIn,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor:
+                              colorScheme.primary, // Use primary color
+                          foregroundColor:
+                              colorScheme.onPrimary, // Text color on button
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 16,
+                          ), // Taller button
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(
+                              12.0,
+                            ), // Match text fields
+                          ),
+                          textStyle: textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        child: const Text('Sign In'),
+                      ),
+                  const SizedBox(height: 24), // Spacing before sign up link
+                  // Sign Up Navigation
+                  Row(
+                    // Center the text button
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        "Don't have an account?",
+                        style: textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: _isLoading ? null : _navigateToSignUp,
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 4,
+                          ), // Reduce padding
+                          foregroundColor:
+                              colorScheme.primary, // Make link stand out
+                          textStyle: textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        child: const Text('Sign Up'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),
